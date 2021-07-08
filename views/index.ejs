@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" type="text/css" href="index.css" media="screen" />
+</head>
+<body>
+    <div>ola mundo</div>
+    <div id="grid">
+        <div id="cliente"></div>
+        <div id="dividas">
+            <table id="tabela"></table>
+            <div id="criaDivida">
+            </div>
+            <button class="novaDivida">Nova divida</button>
+        </div>
+
+    </div>
+
+<script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script type="module">
+        import util from './util.js';
+        import apis from './apis.js';
+        import './criaEdita.js';
+        
+    document.addEventListener('DOMContentLoaded', () =>{
+        // apis.editar()
+        montaGridcliente()
+        
+    })
+
+    // Adiciona evento quando clica nos botões
+    document.addEventListener('click', (el) =>{
+        el.preventDefault()
+        el =  el.target;
+        
+        if(el.className === 'cliente') return alerta(el.id)
+        if(el.id === 'novoSub') return criaDivida();
+        
+        if(el.id === 'apagar') return  apagarDivida(el.parentNode.id)
+
+
+        //criar e ditar 
+        if(el.className === 'novaDivida') return form(el.id)
+        if(el.className === 'salva') return salvaDivida()
+        if(el.id === 'editar') return editar(el)
+    })
+
+
+   function editar (el){
+       const elD = el.parentNode.parentNode.childNodes;
+       const data = {
+            id_divida : el.parentNode.id,
+            valor : elD[1].id,
+            motivo : elD[3].id,
+            date: elD[5].id.split('/').reverse().join('-')
+       }
+       form(data)
+    }
+
+    function form (data = false){
+
+        const id = document.getElementsByClassName('novaDivida').id    
+        document.getElementById('tabela').style.display = 'none'; 
+        document.getElementById('criaDivida').style.display = 'block';    
+
+        const html = `<form class="form">
+                    <div>
+                        <input  nome="id" value="${data ? data.id_divida : id}" hidden/>
+                        <input  nome="editar" value="${data ? true : false}" hidden/>
+                        <label>Motivo</label><br>  
+                        <input type="texto" nome="motivo" value="${data ? data.motivo : ''}"/>
+                    </div>
+                    <div>
+                        <label>Valor</label><br>
+                        <input type="number" nome="valor" value="${data ? data.valor : ''}"/>
+                    </div>
+                    <div>
+                        <label>Data</label><br>
+                        <input type="date" nome="date" value="${data ? data.date : ''}"/>
+                    </div>
+                    <button class="salva">Salvar</button>
+                </form>`;
+        document.getElementById('criaDivida').innerHTML = html
+    }
+
+    async function salvaDivida () {
+
+        const id = document.querySelector("input[nome='id']").value;
+        const editar = document.querySelector("input[nome='editar']").value;
+
+        const form = {
+            motivo: document.querySelector("input[nome='motivo']").value,
+            valor:  document.querySelector("input[nome='valor']").value,
+            date:   document.querySelector("input[nome='date']").value
+        }
+
+        let value = '' 
+
+        if(editar !== 'false') value = await apis.putFetch(apis.urlApi + '/divida/' + id, form);
+        else value = await apis.postFetch(apis.urlApi + '/divida/' + id, form);  
+        
+        if(value[0].id_divida){
+            window.location.reload();
+        }
+    }
+
+    async function  apagarDivida(id){
+        const data = await apis.deleteFetch(apis.urlApi + '/divida/'+ id);
+        if(data) window.location.reload();
+    }
+
+
+    /* função que chama varias funções ao mesmo tempo */
+    const observers = [montaGridDivida,selecionaCliente,];
+    const alerta = (command) => {
+
+        for(const F of observers){
+            F(command)
+        }
+        
+    }
+
+
+
+    /* cria a tabela do cliente clicado */
+    function selecionaCliente(id){
+
+        const clientes = document.getElementById('cliente');
+
+        document.getElementById('dividas').style.display = 'block';
+        document.getElementById('criaDivida').style.display = 'none';
+        document.getElementById('tabela').style.display = 'block';   
+
+        clientes.childNodes.forEach(e =>{
+            e.style.background = 'White';
+            e.style.color = 'black';
+        })  
+    
+        const cliente = document.getElementById(id).style
+        cliente.background = 'black';
+        cliente.color = 'White';
+
+
+        document.getElementsByClassName('novaDivida').id = id;
+
+
+    }
+  
+    /*
+        recebe o id do cliente 
+        retorna a grade de dividas do cliente passado em html
+    */
+    async function montaGridDivida(id)
+    {   
+
+        const dividas = await apis.getFetch(apis.urlApi + '/divida/' + id);
+
+        let html = '<tr id="menu"><th>Valor</th><th>Motivo da Divida</th><th>data</th><th>Ação</th><tr>';
+
+        for(const i of dividas){
+        if(i.date) i.date = i.date.substr(0, 10).split('-').reverse().join('/')
+        html +=  `<tr>
+                        <td class="valor" id="${i.valor}"">R$ ${i.valor}</td>
+                        <td class="motivo" id="${i.motivo}">${i.motivo}</td>
+                        <td class="date" id="${i.date}">${i.date}</td>
+                        <td id="${i.id_divida}" class="acao"><h id="editar">editar</h> <h id="apagar"> X </h></td>
+                    </tr>`
+        }
+
+        document.getElementById('tabela').innerHTML = html;
+        
+    }
+
+    /*
+        Aqui e feita as requisições para api e criada a grade de cliente
+        retorna htmlc
+    */
+    async function montaGridcliente(){
+        util.showLoading('Carregando...')
+
+        const clientes = await apis.getFetch(apis.urlClientes);
+        let html = '';
+        
+        for(const i of clientes){
+        const dividas = await apis.getFetch(apis.urlApi + '/divida/' + i.id);
+        html += `<div class="cliente"  id="${i.id}">
+                    <a class="cliente" id="${i.id}">${i.name} </a>
+                    <h class="cliente" id="${i.id}">R$ ${util.soma(dividas)}</h>
+                </div>`
+        }
+        document.getElementById('cliente').innerHTML = html
+        document.getElementById('grid').style.display = 'flex';
+        swal.close()
+    }
+
+</script>
+    
+</body>
+
+</html>
